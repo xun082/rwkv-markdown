@@ -1,42 +1,48 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - 'release/**'
-      - main
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+  push:
     branches:
       - main
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  auto-release:
-    name: Auto Release
+  # 当创建 release/* PR 时，自动更新版本号
+  update-version:
+    name: Update Version
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
     
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Checkout
+      - name: Checkout PR Branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Version
         id: version
         run: |
-          VERSION=$(echo "${GITHUB_REF#refs/heads/release/}")
+          VERSION=$(echo "${{ github.head_ref }}" | sed 's/release\///')
           if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Invalid version: $VERSION"
             exit 1
           fi
+          CURRENT=$(node -p "require('./package.json').version")
           echo "number=$VERSION" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
 
-      - name: Update Files
+      - name: Update Version
+        if: steps.version.outputs.current != steps.version.outputs.number
         run: |
           VERSION="${{ steps.version.outputs.number }}"
           npm version $VERSION --no-git-tag-version
@@ -49,31 +55,27 @@ jobs:
           echo "Release version $VERSION" >> .changeset/release-$VERSION.md
 
       - name: Commit
+        if: steps.version.outputs.current != steps.version.outputs.number
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --staged --quiet || git commit -m "chore: bump to ${{ steps.version.outputs.number }}"
+          git commit -m "chore: bump to ${{ steps.version.outputs.number }}"
           git push
 
-      - name: Create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.number }}"
-          BRANCH="release/$VERSION"
-          
-          # 检查PR是否存在
-          PR_EXISTS=$(gh pr list --head $BRANCH --base main --state open --json number --jq length)
-          
-          if [ "$PR_EXISTS" -eq "0" ]; then
-            gh pr create \
-              --title "Release v$VERSION" \
-              --body "Auto release v$VERSION" \
-              --base main \
-              --head $BRANCH
-          fi
+      - name: Comment
+        if: steps.version.outputs.current != steps.version.outputs.number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Version updated to \`${{ steps.version.outputs.number }}\`\n\nReady to merge!`
+            });
 
+  # 合并到 main 后自动发布
   publish:
     name: Publish
     runs-on: ubuntu-latest
