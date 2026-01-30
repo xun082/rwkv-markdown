@@ -17,7 +17,7 @@ jobs:
     name: Create Changeset
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')
-    
+
     permissions:
       contents: write
       pull-requests: write
@@ -73,7 +73,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     permissions:
       contents: write
       packages: write

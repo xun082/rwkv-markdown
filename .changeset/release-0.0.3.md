@@ -2,4 +2,4 @@
 "rwkv-markdown": patch
 ---
 
-Release version 0.0.2
+Release version 0.0.3
