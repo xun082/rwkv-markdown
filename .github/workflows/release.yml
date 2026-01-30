@@ -132,33 +132,34 @@ jobs:
 
       - name: Create Pull Request
         if: steps.check_pr.outputs.exists == 'false'
-        run: |
-          VERSION="${{ steps.version.outputs.number }}"
-          gh pr create \
-            --title "🚀 Release v$VERSION" \
-            --body "$(cat <<EOF
-## Release v$VERSION
-
-This PR was automatically created to prepare for the release.
-
-### Changes
-- Updated version to $VERSION
-- Added changeset for release
-
-### Checklist
-- [x] Tests passed
-- [x] Linting passed
-- [x] Build successful
-- [x] Version updated
-- [x] Changeset created
-
-Merge this PR to trigger the release to npm.
-EOF
-)" \
-            --base main \
-            --head "${{ github.ref_name }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          {
+            echo "## Release v${VERSION}"
+            echo ""
+            echo "This PR was automatically created to prepare for the release."
+            echo ""
+            echo "### Changes"
+            echo "- Updated version to ${VERSION}"
+            echo "- Added changeset for release"
+            echo ""
+            echo "### Checklist"
+            echo "- [x] Tests passed"
+            echo "- [x] Linting passed"
+            echo "- [x] Build successful"
+            echo "- [x] Version updated"
+            echo "- [x] Changeset created"
+            echo ""
+            echo "Merge this PR to trigger the release to npm."
+          } > /tmp/pr-body.md
+          
+          gh pr create \
+            --title "🚀 Release v${VERSION}" \
+            --body-file /tmp/pr-body.md \
+            --base main \
+            --head "${{ github.ref_name }}"
 
       - name: Comment on PR
         if: steps.check_pr.outputs.exists == 'true' && steps.check.outputs.needs_commit == 'true'
