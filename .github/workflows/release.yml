@@ -105,7 +105,6 @@ jobs:
         run: pnpm build
 
       - name: Publish
-        if: ${{ secrets.NPM_TOKEN != '' }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           pnpm release
