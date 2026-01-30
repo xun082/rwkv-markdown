@@ -67,21 +67,21 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.number }}"
           CURRENT_VERSION=$(node -p "require('./package.json').version")
-          
+
           # 检查版本是否需要更新
           if [ "$CURRENT_VERSION" = "$VERSION" ]; then
             echo "version_updated=false" >> $GITHUB_OUTPUT
           else
             echo "version_updated=true" >> $GITHUB_OUTPUT
           fi
-          
+
           # 检查是否存在 changeset
           if [ -d ".changeset" ] && [ "$(ls -A .changeset/*.md 2>/dev/null | grep -v 'README.md' | wc -l)" -gt 0 ]; then
             echo "changeset_exists=true" >> $GITHUB_OUTPUT
           else
             echo "changeset_exists=false" >> $GITHUB_OUTPUT
           fi
-          
+
           # 如果版本需要更新或 changeset 不存在，则需要提交更改
           if [ "$CURRENT_VERSION" != "$VERSION" ] || [ "$(ls -A .changeset/*.md 2>/dev/null | grep -v 'README.md' | wc -l)" -eq 0 ]; then
             echo "needs_commit=true" >> $GITHUB_OUTPUT
@@ -154,7 +154,7 @@ jobs:
             echo ""
             echo "Merge this PR to trigger the release to npm."
           } > /tmp/pr-body.md
-          
+
           gh pr create \
             --title "🚀 Release v${VERSION}" \
             --body-file /tmp/pr-body.md \
