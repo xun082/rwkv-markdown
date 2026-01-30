@@ -1,4 +1,4 @@
-本项目基于 [react-markdown](https://github.com/remarkjs/react-markdown) 进行二次开发，旨在增强对公司大模型输出内容的格式兼容性与渲染稳定性。若无需特殊模型兼容支持，建议直接使用 [官方原生版本](https://github.com/remarkjs/react-markdown)。
+本项目基于 [react-markdown](https://github.com/remarkjs/react-markdown) 进行二次开发，旨在增强对 RWKV G1系列大模型输出内容的格式兼容性与渲染稳定性。若无需特殊模型兼容支持，建议直接使用 [官方原生版本](https://github.com/remarkjs/react-markdown)。
 
 # react-markdown
 
