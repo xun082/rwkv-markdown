@@ -54,16 +54,13 @@ jobs:
           VERSION="${{ steps.version.outputs.number }}"
           mkdir -p .changeset
           
-          cat > .changeset/release-$VERSION.md << 'EOF'
+          cat > .changeset/release-$VERSION.md << EOF
 ---
 "rwkv-markdown": patch
 ---
 
 Release version $VERSION
 EOF
-          
-          sed -i.bak "s/\$VERSION/$VERSION/g" .changeset/release-$VERSION.md
-          rm -f .changeset/release-$VERSION.md.bak
 
       - name: Commit Changeset
         if: steps.check.outputs.exists == 'false'
