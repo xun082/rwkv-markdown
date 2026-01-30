@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.0.4
+
+### Patch Changes
+
+- 3824b9b: Release version 0.0.3
+
 ## 0.0.2
 
 ### Patch Changes
