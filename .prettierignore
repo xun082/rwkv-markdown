@@ -1,0 +1,8 @@
+dist/
+node_modules/
+pnpm-lock.yaml
+*.config.js
+*.config.mjs
+*.config.cjs
+*.config.ts
+CHANGELOG.md
