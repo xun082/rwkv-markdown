@@ -8,7 +8,13 @@ import markdown from '@eslint/markdown';
 
 export default [
   {
-    ignores: ['node_modules/**', 'dist/**', '**/*.config.{js,cjs,mjs,ts}'],
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      '**/dist/**',
+      'example/**',
+      '**/*.config.{js,cjs,mjs,ts}',
+    ],
   },
   {
     files: ['**/*.{js,ts}'],
