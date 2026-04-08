@@ -153,6 +153,144 @@ createRoot(document.body).render(<Markdown>{markdown}</Markdown>)
 
 </details>
 
+## RWKV Markdown: 表格样式怎么加
+
+`rwkv-markdown` 现在默认启用了 GFM（包含表格语法），并内置了基础表格样式。  
+如果你想自定义样式，推荐下面两种方式。
+
+### 方式一：通过 `components` 覆盖 `table/th/td`
+
+适合做主题化、动态样式、按业务逻辑定制。
+
+```tsx
+import RWKVMarkdown from 'rwkv-markdown'
+
+const markdown = `
+| Feature | Status |
+| --- | --- |
+| Table | OK |
+| List | OK |
+`
+
+export default function Demo() {
+  return (
+    <RWKVMarkdown
+      components={{
+        table: (props) => (
+          <table
+            {...props}
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              borderRadius: 8,
+              overflow: 'hidden'
+            }}
+          />
+        ),
+        th: (props) => (
+          <th
+            {...props}
+            style={{
+              background: '#f6f8fa',
+              border: '1px solid #d0d7de',
+              padding: '8px 12px',
+              textAlign: 'left'
+            }}
+          />
+        ),
+        td: (props) => (
+          <td
+            {...props}
+            style={{
+              border: '1px solid #d0d7de',
+              padding: '8px 12px',
+              verticalAlign: 'top'
+            }}
+          />
+        )
+      }}
+    >
+      {markdown}
+    </RWKVMarkdown>
+  )
+}
+```
+
+### 方式二：给容器加 class，用 CSS 统一控制（推荐）
+
+适合做全站统一风格，也方便响应式适配。
+
+```tsx
+import RWKVMarkdown from 'rwkv-markdown'
+import './markdown-table.css'
+
+const markdown = `
+| Name | Score |
+| --- | --- |
+| Alice | 95 |
+| Bob | 88 |
+`
+
+export default function Demo() {
+  return (
+    <div className="md-table-wrap">
+      <RWKVMarkdown>{markdown}</RWKVMarkdown>
+    </div>
+  )
+}
+```
+
+```css
+.md-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.md-table-wrap th,
+.md-table-wrap td {
+  border: 1px solid #d0d7de;
+  padding: 8px 12px;
+  line-height: 1.6;
+}
+
+.md-table-wrap thead th {
+  background: #f6f8fa;
+  font-weight: 600;
+}
+
+.md-table-wrap tbody tr:nth-child(even) {
+  background: #fcfcfd;
+}
+```
+
+### 长表格与移动端建议
+
+- 给外层包一层可横向滚动容器，避免手机端挤压变形：
+
+```css
+.md-table-wrap {
+  overflow-x: auto;
+}
+```
+
+- 如果你要固定表头，可加：
+
+```css
+.md-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+```
+
+### 常见排查
+
+- 表格没生效：确认 markdown 中有分隔线行（例如 `| --- | --- |`）。
+- 样式不生效：检查是否被全局 reset 覆盖，或被业务组件样式优先级压制。
+- 表格变一行文本：确认没有把 markdown 作为普通字符串转义后再次渲染。
+
 Here is an example that shows how to use a plugin
 ([`remark-gfm`][github-remark-gfm],
 which adds support for footnotes, strikethrough, tables, tasklists and

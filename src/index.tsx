@@ -1,23 +1,44 @@
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { urlAttributes } from 'html-url-attributes';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
-import { useEffect, useState, ReactElement, ReactNode, ComponentType } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactElement, ReactNode, ComponentType } from 'react';
+import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
-import { unified, PluggableList, Processor } from 'unified';
+import { unified } from 'unified';
+import type { PluggableList, Processor } from 'unified';
 import { visit } from 'unist-util-visit';
 import { VFile } from 'vfile';
-import type { Element, Nodes, Parents, Root, Properties } from 'hast';
+import type { Element, Nodes, Parents, Root } from 'hast';
 import type { Root as MdastRoot } from 'mdast';
 import type { Options as RemarkRehypeOptions } from 'remark-rehype';
 
 const SAFE_PROTOCOL = /^(https?|ircs?|mailto|xmpp)$/i;
 const UNORDERED_LIST_PATTERN = /^[-*+]\s/;
 const ORDERED_LIST_PATTERN = /^\d+[.)]\s/;
-const TABLE_SEPARATOR_PATTERN = /^\|?[\s:]*-+[\s:]*(\|[\s:]*-+[\s:]*)+\|?$/;
-const TABLE_ROW_PATTERN = /^\|(.+\|)+\s*$/;
+const TABLE_SEPARATOR_ALLOWED_CHARS_PATTERN = /^[\s|:-]+$/;
+const TABLE_SEPARATOR_CELL_PATTERN = /^:?-{3,}:?$/;
 const EMPTY_PLUGINS: PluggableList = [];
 const DEFAULT_REMARK_REHYPE_OPTIONS: Readonly<RemarkRehypeOptions> = { allowDangerousHtml: true };
+const DEFAULT_TABLE_STYLES = {
+  table: {
+    borderCollapse: 'collapse',
+    margin: '1em 0',
+    width: '100%',
+  },
+  th: {
+    border: '1px solid #d0d7de',
+    fontWeight: 600,
+    padding: '6px 13px',
+    textAlign: 'left',
+  },
+  td: {
+    border: '1px solid #d0d7de',
+    padding: '6px 13px',
+    verticalAlign: 'top',
+  },
+} as const;
 
 type UrlAttributeTest = null | ReadonlyArray<string>;
 
@@ -57,24 +78,130 @@ interface LineBreakContext {
   isEmpty: boolean;
 }
 
+interface TableBlock {
+  start: number;
+  end: number;
+}
+
+/**
+ * Splits table-like content into cells and removes optional edge pipes
+ * @param line - The line to split
+ * @returns Table cells without empty edge cells
+ */
+function extractTableCells(line: string): string[] {
+  const cells = line.split('|').map((cell) => cell.trim());
+  const hasLeadingPipe = line.trimStart().startsWith('|');
+  const hasTrailingPipe = line.trimEnd().endsWith('|');
+
+  if (hasLeadingPipe) {
+    cells.shift();
+  }
+
+  if (hasTrailingPipe) {
+    cells.pop();
+  }
+
+  return cells;
+}
+
+/**
+ * Checks if a line is a markdown table separator row
+ * Supports both `| --- | --- |` and `--- | ---` formats
+ * @param line - The line to check
+ * @returns True if the line is a table separator
+ */
+function isTableSeparatorLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|') || !TABLE_SEPARATOR_ALLOWED_CHARS_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  const cells = extractTableCells(trimmed);
+  return cells.length >= 2 && cells.every((cell) => TABLE_SEPARATOR_CELL_PATTERN.test(cell));
+}
+
+/**
+ * Checks if a line is a potential markdown table row
+ * Supports both `| a | b |` and `a | b` formats
+ * @param line - The line to check
+ * @returns True if the line looks like a table row
+ */
+function isTableRowLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|') || isTableSeparatorLine(trimmed)) {
+    return false;
+  }
+
+  const cells = extractTableCells(trimmed);
+  return cells.length >= 2 && cells.some((cell) => cell.length > 0);
+}
+
+/**
+ * Detects table blocks using GFM table structure:
+ * header row + separator row + optional data rows.
+ */
+function detectTableBlocks(lines: string[]): TableBlock[] {
+  const blocks: TableBlock[] = [];
+  let i = 0;
+
+  while (i < lines.length - 1) {
+    const header = lines[i];
+    const separator = lines[i + 1];
+
+    if (!isTableRowLine(header) || !isTableSeparatorLine(separator)) {
+      i += 1;
+      continue;
+    }
+
+    const headerCells = extractTableCells(header.trim());
+    const separatorCells = extractTableCells(separator.trim());
+
+    if (headerCells.length !== separatorCells.length) {
+      i += 1;
+      continue;
+    }
+
+    let end = i + 1;
+    let cursor = i + 2;
+
+    while (cursor < lines.length) {
+      const row = lines[cursor];
+      if (!row.trim()) {
+        break;
+      }
+
+      const rowCells = extractTableCells(row.trim());
+      if (!isTableRowLine(row) || rowCells.length !== headerCells.length) {
+        break;
+      }
+
+      end = cursor;
+      cursor += 1;
+    }
+
+    blocks.push({ start: i, end });
+    i = end + 1;
+  }
+
+  return blocks;
+}
+
 /**
  * Analyzes a line to determine its type (table, list, empty)
  * @param line - The line to analyze
  * @returns Context object with line type flags
  */
-function analyzeLineType(line: string): LineBreakContext {
+function analyzeLineType(line: string, isTableLine: boolean): LineBreakContext {
   const trimmed = line.trim();
 
   if (!trimmed) {
     return { isTable: false, isList: false, isEmpty: true };
   }
 
-  // More accurate table detection: must have pipes and look like a table row or separator
-  const isTable = TABLE_ROW_PATTERN.test(trimmed) || TABLE_SEPARATOR_PATTERN.test(trimmed);
   const isList = UNORDERED_LIST_PATTERN.test(trimmed) || ORDERED_LIST_PATTERN.test(trimmed);
 
   return {
-    isTable,
+    isTable: isTableLine,
     isList,
     isEmpty: false,
   };
@@ -102,6 +229,13 @@ export function processLineBreaks(content: string): string {
   if (!content) return '';
 
   const lines = content.split('\n');
+  const tableLineIndexes = new Set<number>();
+  const tableBlocks = detectTableBlocks(lines);
+  for (const block of tableBlocks) {
+    for (let i = block.start; i <= block.end; i++) {
+      tableLineIndexes.add(i);
+    }
+  }
   const result: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -121,8 +255,8 @@ export function processLineBreaks(content: string): string {
       continue;
     }
 
-    const currentContext = analyzeLineType(lines[i]);
-    const nextContext = analyzeLineType(lines[i + 1]);
+    const currentContext = analyzeLineType(lines[i], tableLineIndexes.has(i));
+    const nextContext = analyzeLineType(lines[i + 1], tableLineIndexes.has(i + 1));
 
     // Use single line break for tables and lists, double for everything else
     result.push(shouldUseSingleLineBreak(currentContext, nextContext) ? '\n' : '\n\n');
@@ -140,7 +274,8 @@ function createProcessor(
   options: RWKVMarkdownProps,
 ): Processor<MdastRoot, MdastRoot, Root, undefined, undefined> {
   const rehypePlugins = options.rehypePlugins ?? EMPTY_PLUGINS;
-  const remarkPlugins = options.remarkPlugins ?? EMPTY_PLUGINS;
+  const userRemarkPlugins = options.remarkPlugins ?? EMPTY_PLUGINS;
+  const remarkPlugins: PluggableList = [remarkGfm, ...userRemarkPlugins];
   const remarkRehypeOptions = options.remarkRehypeOptions
     ? { ...DEFAULT_REMARK_REHYPE_OPTIONS, ...options.remarkRehypeOptions }
     : DEFAULT_REMARK_REHYPE_OPTIONS;
@@ -305,6 +440,21 @@ function handleElementRemoval(
 }
 
 /**
+ * Merges default inline styles with existing styles from markdown attributes
+ * @param style - Existing style prop
+ * @param defaults - Default style object
+ * @returns Merged style object
+ */
+function mergeInlineStyle(
+  style: unknown,
+  defaults: Readonly<Record<string, string | number>>,
+): Record<string, string | number> {
+  return style && typeof style === 'object' && !Array.isArray(style)
+    ? { ...defaults, ...(style as Record<string, string | number>) }
+    : { ...defaults };
+}
+
+/**
  * Post-processes the syntax tree, applying filters and transformations
  * @param tree - The syntax tree to process
  * @param options - Processing options
@@ -365,9 +515,28 @@ function postProcess(tree: Nodes, options: RWKVMarkdownProps): ReactElement {
     }
   });
 
-  // Create enhanced components with br handler
+  // Create enhanced components with table and br handlers
   const enhancedComponents: ComponentMap = {
     ...components,
+    // Apply readable default table styles to avoid collapsed cells under CSS resets
+    table:
+      components?.table ||
+      ((props => {
+        const style = mergeInlineStyle((props as { style?: unknown }).style, DEFAULT_TABLE_STYLES.table);
+        return jsx('table', { ...props, style });
+      }) as ComponentType<Record<string, unknown>>),
+    th:
+      components?.th ||
+      ((props => {
+        const style = mergeInlineStyle((props as { style?: unknown }).style, DEFAULT_TABLE_STYLES.th);
+        return jsx('th', { ...props, style });
+      }) as ComponentType<Record<string, unknown>>),
+    td:
+      components?.td ||
+      ((props => {
+        const style = mergeInlineStyle((props as { style?: unknown }).style, DEFAULT_TABLE_STYLES.td);
+        return jsx('td', { ...props, style });
+      }) as ComponentType<Record<string, unknown>>),
     // Handle br tags properly (ensure they render as line breaks)
     br: components?.br || ((() => jsx('br', {})) as ComponentType<Record<string, unknown>>),
   };

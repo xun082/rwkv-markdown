@@ -1,0 +1,26 @@
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 36px 20px 60px;
+  text-align: left;
+}
+
+.container h1 {
+  margin-bottom: 12px;
+}
+
+.desc {
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.preview {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.preview a {
+  color: var(--accent);
+}
