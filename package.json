@@ -1,6 +1,6 @@
 {
   "name": "rwkv-markdown",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Enhanced React Markdown with smart line break handling - Supports tables, lists, and automatic paragraph formatting",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
